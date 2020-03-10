@@ -18,8 +18,8 @@ function App() {
   const [content, setContent] = React.useState("test")
 
   const parse = () => {
-    const code = ["x = function(){", 'h= 2', '}', 'x()'].join('\n') + '\n';
-    const code2 = ['x  = 4', 'x()'].join('\n') + '\n';
+    const code = ["test= function(x){if (!x){return(3 == 2)}}"].join('\n') + '\n';
+    const code2 = ['def nick (x): ', '  if x==2:', '    return 3 == 1+2'].join('\n') + '\n';
     const test = py.parse(code2)
     console.log(test)
     //  const test2= python3Parse(code);

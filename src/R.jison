@@ -373,6 +373,8 @@ expr_stmt
         { $$ = { type: 'assign', targets: $1.concat($2.targets), sources: $2.sources, location: @$ } }
     | expr2 "=" 'function' parameters suite
         { $$ = { type: 'def', name: $1, params: $4, code: $5, location: @$ } }
+    | expr2 "<-" 'function' parameters suite
+        { $$ = { type: 'def', name: $1, params: $4, code: $5, location: @$ } }
     ;
 
 
@@ -426,8 +428,8 @@ continue_stmt
 return_stmt
     : 'return'
         { $$ = {type:'return', location: @$} }
-    | 'return' testlist
-        { $$ = {type:'return', values:$2, location: @$} }
+    | 'return' '(' test ')'
+        { $$ = {type:'return', values:$3, location: @$} }
     ;
 
 // yield_stmt: yield_expr
@@ -599,32 +601,32 @@ compound_stmt:  if_stmt | while_stmt | for_stmt | try_stmt | with_stmt |
 
 // if_stmt: 'if' test ':' suite ('elif' test ':' suite)* ['else' ':' suite]
 if_stmt
-    : 'if' test ':' suite
-        { $$ = { type: 'if',  cond: $2, code: $4, location: @$ } }
-    | 'if' test ':' suite else_part
+    : 'if' '(' test ')' suite
+        { $$ = { type: 'if',  cond: $3, code: $5, location: @$ } }
+    | 'if' '(' test ')' suite else_part
         { 
-            $$ = { type: 'if', cond: $2, code: $4, else: $5, location: @$ }
+            $$ = { type: 'if', cond: $3, code: $5, else: $6, location: @$ }
         }
-    | 'if' test ':' suite if_stmt0
+    | 'if' '(' test ')' suite if_stmt0
         {
-            $$ = { type: 'if', cond: $2, code: $4, elif: $5, location: @$ }
+            $$ = { type: 'if', cond: $3, code: $5, elif: $6, location: @$ }
         }
-    | 'if' test ':' suite if_stmt0 else_part
+    | 'if' '(' test ')' suite if_stmt0 else_part
         {
-            $$ = { type: 'if', cond: $2, code: $4, elif: $5, else: $6, location: @$ }
+            $$ = { type: 'if', cond: $3, code: $5, elif: $6, else: $7, location: @$ }
         }
     ;
 
 if_stmt0
-    : 'elif' test ':' suite
-        { $$ = [ { cond: $2, code: $4 } ] }
-    | 'elif' test ':' suite if_stmt0
-        { $$ = [ { cond: $2, code: $4 } ].concat( $5 ) }
+    : 'else' 'if' '(' test ')' suite
+        { $$ = [ { cond: $4, code: $6 } ] }
+    | 'else' 'if' '(' test ')' suite if_stmt0
+        { $$ = [ { cond: $4, code: $6 } ].concat( $5 ) }
     ;
 
 else_part
-    : 'else' ':' suite
-        { $$ = { type: 'else', code: $3, location: @$ } }
+    : 'else' suite
+        { $$ = { type: 'else', code: $2, location: @$ } }
     ;
 
 // while_stmt: 'while' test ':' suite ['else' ':' suite]
@@ -732,9 +734,9 @@ suite0
 
 // test: or_test ['if' or_test 'else' test] | lambdef
 test
-    : or_test
-    | or_test 'if' or_test 'else' test
-        { $$ = {type:'ifexpr', test: $3, then:$1, else: $5, location: @$ } }
+    :  or_test
+    // | or_test 'if' or_test 'else' test
+    //     { $$ = {type:'ifexpr', test: $3, then:$1, else: $5, location: @$ } }
     | lambdef
     ;
 
@@ -785,7 +787,7 @@ and_test0
 
 // not_test: 'not' not_test | comparison
 not_test
-    : 'not' not_test
+    : '!' not_test
         { $$ = { type: 'unop', op: $1, operand: $2, location: @$ } }
     | comparison
     ;
