@@ -885,6 +885,7 @@ showPosition:function () {
 
 // test the lexed token: return FALSE when not a match, otherwise return token
 test_match:function(match, indexed_rule) {
+    console.log(match)
         var token,
             lines,
             backup;
@@ -944,6 +945,7 @@ test_match:function(match, indexed_rule) {
             this.done = false;
         }
         if (token) {
+            console.log(token)
             return token;
         } else if (this._backtrack) {
             // recover context

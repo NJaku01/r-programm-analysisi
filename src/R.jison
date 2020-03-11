@@ -15,9 +15,9 @@ xid_start               ("_")|({uppercase})|({lowercase})
 xid_continue            {xid_start}|{digit}
 
 // reserved
-operators               "-"|"+"|"!"|"~"|"?"|":"|"*"|"/"|"^"|"%x%"|
-                        "%%"|"%/%"|"%*%"|"%o%"|"%x%"|"%in%"|"<"|">"|"="|"=="|">="|
-                        "<="|">="|"&"|"&&"|"|"|"||"|"<-"|"->"|"$"|"("|")"|"["|"]"|"{"|"}"
+operators               "-"|"+"|"!"|"~"|"?"|":"|"*"|"/"|"^"|"%x%"|","|"."|
+                        "%%"|"%/%"|"%*%"|"%o%"|"%x%"|"%in%"|"<-"|">="|"=="|"="|">"|
+                        "<="|">="|"&"|"&&"|"|"|"||"|"<"|"->"|"$"|"("|")"|"["|"]"|"{"|"}"
                         
 ellipsis                "..."
 
@@ -197,7 +197,7 @@ imagnumber              ({floatnumber}|{intpart})[jJ]
                             const keywords = [
                                 "continue", "nonlocal", "finally", "lambda", "return", "assert",
                                 "global", "import", "except", "raise", "break", "False", "class",
-                                "while", "yield", "None", "True", "from", "with", "elif", "else",
+                                "while", "yield", "None", "True", "from", "with", "else",
                                 "pass", "for", "try", "def", "and", "del", "not", "is", "as", "if",
                                 "or", "in", "source", "library", "function"
                             ]
@@ -332,10 +332,10 @@ vfpdef: NAME;
 
 // stmt: simple_stmt | compound_stmt
 stmt
-    : compound_stmt
-        { $$ = $1 }
-    | simple_stmt
+    : simple_stmt
         { $$ = [$1] }
+    | compound_stmt
+        { $$ = $1 }
     ;
 
 // simple_stmt: small_stmt (';' small_stmt)* [';'] NEWLINE
@@ -385,12 +385,22 @@ assignlist
         { $$ = {targets: ["test"]}}
     | '=' expr2 assignlist
         { $$ = { targets: $2.concat($3.targets), sources: $3.sources } }
-    | '<' '-' expr
-        { $$ = { targets: [], sources: [$3] } }
-    | '<' '-' expr2 assignlist
-        { $$ = { targets: $3.concat($4.targets), sources: $4.sources } }
+    | '<-' expr
+        { $$ = { targets: [], sources: [$2] } }
+    | '<-' expr2 assignlist
+        { $$ = { targets: $3.concat($2.targets), sources: $3.sources } }
+    | '=' 'read.' read 
+        { $$ = { targets: [], sources: [$3]} }
+    | '<-' 'read.' read 
+        { $$ = { targets: [], sources: [$3]} }
     ;
 
+read
+    : NAME '(' STRING ')'
+        { $$ = { type: 'import', names: $3, file: $1, location: @$ } }
+    | NAME '(' NAME ')'
+        { $$ = { type: 'import', names: $3, file: $1, location: @$ } }
+    ;
 expr2
     : expr
         { $$ = [ $1 ] }
@@ -458,6 +468,8 @@ import_name
     : 'import' dotted_as_names
         { $$ = {type: 'import', names: $2, location: @$ } }
     | 'library'  '(' STRING ')'
+        { $$ = {type: 'import', names: $3, location: @$ } }
+    | 'library'  '(' NAME ')'
         { $$ = {type: 'import', names: $3, location: @$ } }
     ;
 
@@ -601,28 +613,38 @@ compound_stmt:  if_stmt | while_stmt | for_stmt | try_stmt | with_stmt |
 
 // if_stmt: 'if' test ':' suite ('elif' test ':' suite)* ['else' ':' suite]
 if_stmt
-    : 'if' '(' test ')' suite
-        { $$ = { type: 'if',  cond: $3, code: $5, location: @$ } }
-    | 'if' '(' test ')' suite else_part
-        { 
-            $$ = { type: 'if', cond: $3, code: $5, else: $6, location: @$ }
-        }
-    | 'if' '(' test ')' suite if_stmt0
+    : 'if' '(' test ')' suite newlines if_stmt0
         {
-            $$ = { type: 'if', cond: $3, code: $5, elif: $6, location: @$ }
+            $$ = [ { type: 'if', cond: $3, code: $5, elif: $7, location: @$ } ]
         }
-    | 'if' '(' test ')' suite if_stmt0 else_part
-        {
-            $$ = { type: 'if', cond: $3, code: $5, elif: $6, else: $7, location: @$ }
-        }
+    // | 'if' '(' test ')' suite if_stmt0 else_part
+    //     {
+    //         $$ = { type: 'if', cond: $3, code: $5, elif: $6, else: $7, location: @$ }
+    //     }
+
+    // | 'if' '(' test ')' suite else_part
+    //    { 
+    //        $$ = { type: 'if', cond: $3, code: $5, else: $6, location: @$ }
+    //    }
+    | 'if' '(' test ')' newlines suite
+        { $$ = [{ type: 'if',  cond: $3, code: $6, location: @$ } ] }
     ;
 
 if_stmt0
-    : 'else' 'if' '(' test ')' suite
-        { $$ = [ { cond: $4, code: $6 } ] }
-    | 'else' 'if' '(' test ')' suite if_stmt0
-        { $$ = [ { cond: $4, code: $6 } ].concat( $5 ) }
+    : 'else' 'if' '(' test ')' newlines suite
+        { $$ = [ { cond: $4, code: $7 } ] }
+    | 'else' 'if' '(' test ')' newlines suite if_stmt0
+        { $$ = [ { cond: $4, code: $7 } ].concat( $8 ) }
+    | 'else' newlines suite
+        { $$ = [{ type: 'else', code: $3, location: @$ }] }
     ;
+
+ 
+newlines
+    : NEWLINE newlines
+    | NEWLINE
+    | " "
+    ;   
 
 else_part
     : 'else' suite
@@ -723,13 +745,15 @@ with_item
 suite
     : "{"  suite0 "}"
         { $$ = $2 }
+    | simple_stmt
+        { $$ = $1}
     ;
 
 suite0
     : stmt
         { $$ = $1 }
     | stmt suite0
-        { $$ = $1.concat( $2 ) }
+        { $$ = [$1].concat( $2 ) }
     ;
 
 // test: or_test ['if' or_test 'else' test] | lambdef
@@ -1241,24 +1265,24 @@ argument
         { $$ = { type: 'arg', varargs: true, actual: $2, location: @$ } }
     ;
 
-// comp_iter: comp_for | comp_if
-comp_iter: comp_for | comp_if ;
+// // comp_iter: comp_for | comp_if
+// comp_iter: comp_for | comp_if ;
 
-// comp_for: 'for' exprlist 'in' or_test [comp_iter]
-comp_for
-    : 'for' exprlist 'in' or_test
-        { $$ = [{ type: 'comp_for', for: $2, in: $4, location: @$ }] }
-    | 'for' exprlist 'in' or_test comp_iter
-        { $$ = [{ type: 'comp_for', for: $2, in: $4, location: @$ }].concat( $5 ) }
-    ;
+// // comp_for: 'for' exprlist 'in' or_test [comp_iter]
+// comp_for
+//     : 'for' exprlist 'in' or_test
+//         { $$ = [{ type: 'comp_for', for: $2, in: $4, location: @$ }] }
+//     | 'for' exprlist 'in' or_test comp_iter
+//         { $$ = [{ type: 'comp_for', for: $2, in: $4, location: @$ }].concat( $5 ) }
+//     ;
 
-// comp_if: 'if' test_nocond [comp_iter]
-comp_if
-    : 'if' test_nocond
-        { $$ = [{ type: 'comp_if', test: $2, location: @$ }] }
-    | 'if' test_nocond comp_iter
-        { $$ = [{ type: 'comp_if', test: $2, location: @$ }].concat( $3 )}
-    ;
+// // comp_if: 'if' test_nocond [comp_iter]
+// comp_if
+//     : 'if' test_nocond
+//         { $$ = [{ type: 'comp_if', test: $2, location: @$ }] }
+//     | 'if' test_nocond comp_iter
+//         { $$ = [{ type: 'comp_if', test: $2, location: @$ }].concat( $3 )}
+//     ;
 
 // yield_expr: 'yield' [yield_arg]
 yield_expr
