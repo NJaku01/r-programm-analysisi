@@ -5,6 +5,9 @@ import './App.css';
 import * as py from '@msrvida/python-program-analysis';
 
 import { parse as python3Parse, parser } from './python3';
+import {DataflowAnalyzer} from './es6/data-flow'
+import {ControlFlowGraph} from './es6/control-flow'
+import {slice} from './es6/slice'
 import { parse as RParse } from './R';
 import code1 from './code'
 
@@ -20,22 +23,28 @@ function App() {
 
   const parse = () => {
     const code = code1.join('\n') + '\n';
-    const code3 = ["if (!uncert) {","  # Compute expected damage. Note that (only) one of the hazard variables can ","  # be passed to the function as a vector.","  modelOutput <- ComputeDamage(he, velocity, duration, sediment, q, ","                  FA, IA, BA, EP, IH, BH, GL, NF, BT, BS, PD, PT, FL, YY, LM, ","                  repVal, up, uncert)","}else if (uncert) {","  # Probabilistic computation. All the hazard variables must be passed to the","  # function as scalars. x=2 }"].join('\n') + '\n';
+    const code3 = ["test(a$b) "].join('\n') + '\n';
     console.log(code)
 
-    const code2 = ['if x==2:', '    return 3 == 2', "else:",' return 3'].join('\n') + '\n';
+    const code2 = ['def test(x, y):', '    return 3 == 2', "x = 1",'y=3', 'x=test(x,y)'].join('\n') + '\n';
     const test = py.parse(code2)
     console.log(test)
-      const test2= python3Parse(code2);
-      console.log(test2)
-    console.log(RParse(code3))
-    // const cfg = new py.ControlFlowGraph(test);
-    // console.log(cfg)
+      //const test2= python3Parse(code2);
+      //console.log(test2)
+    const codeJSON= RParse(code)
+    console.log(codeJSON)
+    // const cfg = new ControlFlowGraph(codeJSON);
+    //  console.log(cfg)
     // const analyzer = new py.DataflowAnalyzer();
-    // const flows = analyzer.analyze(cfg).dataflows;
-    // console.log(flows)
-    // const test2= py.slice(test, {items: [{first_line: 6, first_column: 0, last_line: 6, last_column: 8}]})
-    // console.log(test2)
+    //   var analyzer2 = new DataflowAnalyzer();
+    //   const flows = analyzer2.analyze(cfg);
+    //   console.log(flows)
+    const test5= slice(codeJSON, {items: [{first_line: 413, first_column: 0, last_line: 413, last_column: 27}]})
+    console.log(test5)
+    // const test5= slice(codeJSON, {items: [{first_line: 17, first_column: 0, last_line: 17, last_column: 13}]})
+    // console.log(test5)
+    const test6= slice(test, {items: [{first_line: 5, first_column: 0, last_line: 15, last_column: 11}]})
+    console.log(test6)
     // const test3 = py.printNode(test2)
     // console.log(test3)
     // setContent(test3)
