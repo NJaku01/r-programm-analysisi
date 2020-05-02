@@ -198,7 +198,7 @@ imagnumber              ({floatnumber}|{intpart})[jJ]
                                 "continue", "nonlocal", "finally", "lambda", "return", "assert",
                                 "global", "import", "except", "raise", "break", "False", "class",
                                 "while", "yield", "None", "True", "from", "with", "else",
-                                "pass", "for", "try", "def", "and", "del", "not", "is", "as", "if",
+                                "pass", "for", "try", "def", "and", "del", "not", "as", "if",
                                 "or", "in", "source", "library", "function"
                             ]
                             return ( keywords.indexOf( yytext ) == -1 )
@@ -612,22 +612,13 @@ compound_stmt:  if_stmt | while_stmt | for_stmt | try_stmt | with_stmt |
 
 // if_stmt: 'if' test ':' suite ('elif' test ':' suite)* ['else' ':' suite]
 if_stmt
-    : 'if' '(' test ')' suite newlines if_stmt0
-        {
-            $$ = [ { type: 'if', cond: $3, code: $5, elif: $7, location: @$ } ]
-        }
-    // | 'if' '(' test ')' suite if_stmt0 else_part
-    //     {
-    //         $$ = { type: 'if', cond: $3, code: $5, elif: $6, else: $7, location: @$ }
-    //     }
-
-    // | 'if' '(' test ')' suite else_part
-    //    { 
-    //        $$ = { type: 'if', cond: $3, code: $5, else: $6, location: @$ }
-    //    }
-    | 'if' '(' test ')' newlines suite
+    : 'if' '(' test ')' newlines suite newlines
         { $$ = [{ type: 'if',  cond: $3, code: $6, location: @$ } ] }
-    ;
+
+    | 'if' '(' test ')' newlines suite newlines if_stmt0
+        {
+            $$ = [ { type: 'if', cond: $3, code: $6, elif: $8, location: @$ } ]
+        };
 
 if_stmt0
     : 'else' 'if' '(' test ')' newlines suite
@@ -1014,6 +1005,8 @@ atom
         { $$ = { type: $2.type, entries: $2.entries, comp_for: $2.comp_for, location: @$ } }
     | NAME
         { $$ = { type: 'name', id: $1, location: @$ } }
+    | NAME "." NAME
+        { $$ = { type: 'name', id: $1 + $2 + $3, location: @$ } }
     | NUMBER
         { $$ = { type: 'literal', value: $1 * 1, location: @$ } } // convert to number
     | string
