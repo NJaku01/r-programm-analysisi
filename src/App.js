@@ -23,14 +23,9 @@ function App() {
 
   const parse = () => {
     const code = code1.join('\n') + '\n';
-    const code3 = ["if(test) {x =3 } else { x= 4} call(test)"].join('\n') + '\n';
+    const code3 = ["cr = cr[-(1:3)]"].join('\n') + '\n';
     console.log(code)
 
-    const code2 = ['def test(x, y):', '    return 3 == 2', "x = 1",'y=3', 'x=test(x,y)'].join('\n') + '\n';
-    const test = py.parse(code2)
-    console.log(test)
-      //const test2= python3Parse(code2);
-      //console.log(test2)
     const codeJSON= RParse(code)
     console.log(codeJSON)
     // const cfg = new ControlFlowGraph(codeJSON);
@@ -39,9 +34,10 @@ function App() {
     //   var analyzer2 = new DataflowAnalyzer();
     //   const flows = analyzer2.analyze(cfg);
     //   console.log(flows)
-    const test5= slice(codeJSON, {items: [{first_line: 400, first_column: 0, last_line: 400, last_column: 27}]})
-    console.log(test5)
-    handleAlogrithmusErrors(codeJSON.code,test5.items)
+    //const test5= slice(codeJSON, {items: [{first_line: 400, first_column: 0, last_line: 400, last_column: 27}]})
+    //console.log(test5)
+    //handleAlogrithmusErrors(codeJSON.code,test5.items)
+    setContent(codeJSON)
     // const test5= slice(codeJSON, {items: [{first_line: 17, first_column: 0, last_line: 17, last_column: 13}]})
     // console.log(test5)
     //const test6= slice(test, {items: [{first_line: 5, first_column: 0, last_line: 15, last_column: 11}]})
@@ -49,6 +45,7 @@ function App() {
     // const test3 = py.printNode(test2)
     // console.log(test3)
     // setContent(test3)
+
   }
 
   const handleAlogrithmusErrors = (code, codelines) => {
@@ -99,6 +96,7 @@ function App() {
   return (
     <div>
       <button onClick={() => parse()}> parse </button>
+      <p>{content}</p>
     </div>
   );
 }

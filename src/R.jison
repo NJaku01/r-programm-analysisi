@@ -15,8 +15,8 @@ xid_start               ("_")|({uppercase})|({lowercase})
 xid_continue            {xid_start}|{digit}
 
 // reserved
-operators               "-"|"+"|"!"|"~"|"?"|":"|"*"|"/"|"^"|"%x%"|","|"."|
-                        "%%"|"%/%"|"%*%"|"%o%"|"%x%"|"%in%"|"<-"|">="|"=="|"="|">"|'$'|
+operators               "-"|"+"|"!"|"~"|"?"|":"|"*"|"/"|"^"|"%x%"|","|"."|";"|
+                        "%%"|"%/%"|"%*%"|"%o%"|"%x%"|"%in%"|"<-"|"<<-"|">="|"=="|"="|">"|'$'|
                         "<="|">="|"&"|"&&"|"|"|"||"|"<"|"->"|"$"|"("|")"|"["|"]"|"{"|"}"
                         
 ellipsis                "..."
@@ -59,21 +59,15 @@ fraction                "."{digit}+
 exponent                [e|E][\+|\-]?({digit})+
 imagnumber              ({floatnumber}|{intpart})[jJ]
 
-%s INITIAL INLINE DEDENTS TRIPLE_D TRIPLE_S
+%s INITIAL INLINE TRIPLE_D TRIPLE_S
 
 %%
 
 <INITIAL,INLINE><<EOF>> %{ 
                             // if the last statement in indented, need to force a dedent before EOF
-                            if (this.indents == undefined) { this.indents = [0]; }
-                            if (this.indents.length > 1) { 
-                               this.begin( 'DEDENTS' ); 
-                               this.unput(' '); // make sure EOF is not triggered 
-                               this.dedents = 1; 
-                               this.indents.pop();
-                            } else { 
+                        
                                 return 'EOF'; 
-                            } 
+                            
                         %}
 <INITIAL>\              %{ if (this.indent == undefined) this.indent = 0; this.indent += 1 %}
 <INITIAL>\t             %{ if (this.indent == undefined) this.indent = 0; this.indent = ( this.indent + 8 ) & -7 %}
@@ -81,44 +75,14 @@ imagnumber              ({floatnumber}|{intpart})[jJ]
 <INITIAL>\#[^\n]*       /* skip comments */
 <INITIAL>.              %{ 
                             this.unput( yytext )
-                            if (this.indents == undefined) this.indents = [0];
-                            var last = this.indents[ this.indents.length - 1 ]
-                            if (this.indent == undefined) this.indent = 0;
-                            if ( this.indent > last ) {
+                            
                                 this.begin( 'INLINE' )
-                                this.indents.push( this.indent )
-                                return 'INDENT'
-                            } else if ( this.indent < last ) {
-                                this.begin( 'DEDENTS' )
-                                this.dedents = 0 // how many dedents occured
-                                while( this.indents.length ) {
-                                    this.dedents += 1
-                                    this.indents.pop()
-                                    last = this.indents[ this.indents.length - 1 ]
-                                    if ( last == this.indent ) break
-                                }
-                                if ( !this.indents.length ) {
-                                    throw new Error( "TabError: Inconsistent" )
-                                }
-                            } else {
-                                this.begin( 'INLINE' )
-                            }
-                        %}
-<DEDENTS>.              %{
-                            this.unput( yytext )
-                            if (this.dedents == undefined) this.dedents = 0;
-                            if ( this.dedents-- > 0 ) {
-                                return 'DEDENT'
-                            } else {
-                                this.begin( 'INLINE' )
-                            }
                         %}
 
 <INLINE>\n              %{
                             // implicit line joining
                             if (this.brackets_count == undefined) this.brackets_count = 0;
                             if ( this.brackets_count <= 0 ) {
-                                this.indent = 0; 
                                 this.begin( 'INITIAL' )
                                 return 'NEWLINE'
                             }
@@ -197,8 +161,8 @@ imagnumber              ({floatnumber}|{intpart})[jJ]
                             const keywords = [
                                 "continue", "nonlocal", "finally", "lambda", "return", "assert",
                                 "global", "import", "except", "raise", "break", "False", "class",
-                                "while", "yield", "None", "True", "from", "with", "else",
-                                "pass", "for", "try", "def", "and", "del", "not", "as", "if",
+                                "while", "yield", "None", "True", "from", "else",
+                                "pass", "for", "try", "def", "and", "del", "not", "if",
                                 "or", "in", "source", "library", "function"
                             ]
                             return ( keywords.indexOf( yytext ) == -1 )
@@ -388,6 +352,10 @@ assignlist
         { $$ = { targets: [], sources: [$2] } }
     | '<-' expr2 assignlist
         { $$ = { targets: $3.concat($2.targets), sources: $3.sources } }
+    | '<<-' expr
+        { $$ = { targets: [], sources: [$2] } }
+    | '<<-' expr2 assignlist
+        { $$ = { targets: $3.concat($2.targets), sources: $3.sources } }
     | '=' 'read.' read 
         { $$ = { targets: [], sources: [$3]} }
     | '<-' 'read.' read 
@@ -400,6 +368,7 @@ read
     | NAME '(' NAME ')'
         { $$ = { type: 'import', names: $3, file: $1, location: @$ } }
     ;
+
 expr2
     : expr
         { $$ = [ $1 ] }
@@ -918,14 +887,14 @@ arith_expr
     ;
 
 arith_expr0
-    : '+' term
-        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $2, location: loc }; } }
-    | '+' term arith_expr0
-        { loc = @$; $$ = function (left) { return $3({type:'binop', op:$1, left: left, right: $2, location: loc }); } }
-    | '-' term
-        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $2, location: loc }; } }
-    | '-' term arith_expr0
-        { loc = @$; $$ = function (left) { return $3({type:'binop', op:$1, left: left, right: $2, location: loc }); } }
+    : '+' newlines term
+        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $3, location: loc }; } }
+    | '+' newlines term arith_expr0
+        { loc = @$; $$ = function (left) { return $4({type:'binop', op:$1, left: left, right: $3, location: loc }); } }
+    | '-' newlines term
+        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $3, location: loc }; } }
+    | '-' newlines term arith_expr0
+        { loc = @$; $$ = function (left) { return $4({type:'binop', op:$1, left: left, right: $3, location: loc }); } }
     ;
 
 // term: factor (('*'|'/'|'%'|'//') factor)*
@@ -1005,8 +974,8 @@ atom
         { $$ = { type: $2.type, entries: $2.entries, comp_for: $2.comp_for, location: @$ } }
     | NAME
         { $$ = { type: 'name', id: $1, location: @$ } }
-    | NAME "." NAME
-        { $$ = { type: 'name', id: $1 + $2 + $3, location: @$ } }
+    | dotted_name
+        { $$ = { type: 'name', id: $1, location: @$ } }
     | NUMBER
         { $$ = { type: 'literal', value: $1 * 1, location: @$ } } // convert to number
     | string
@@ -1085,6 +1054,8 @@ trailer
         { loc = @$; $$ = function (left) { return {type: 'index', value: left, args: $2, location: loc }; } }
     | '.' NAME
         { loc = @$; $$ = function (left) { return {type: 'dot', value: left, name: $2, location: loc }; } }
+    | '$' NAME
+        { loc = @$; $$ = function (left) { return {type: 'dot', value: left, name: $2, location: loc }; } }
     ;
 
 // subscriptlist: subscript (',' subscript)* [',']
@@ -1113,6 +1084,8 @@ subscript
         { $$ = { type: 'slice', start: $1, stop: $3, step: $4, location: @$ } }
     | test ':' test
         { $$ = { type: 'slice', start: $1, stop: $3, location: @$ } }
+    | "-" "(" test ':' test ")"
+        { $$ = { type: 'slice', start: $3, stop: $5, location: @$ } }
     | test ':' sliceop
         { $$ = { type: 'slice', start: $1, step: $3, location: @$ } }
     | test ':'
@@ -1260,6 +1233,8 @@ arglist0
 argument
     : test
         { $$ = { type: 'arg', actual: $1, location: @$ } }
+    | 'function' parameters suite
+        { $$ = { type: 'arg', actual: { type: 'def', name: "" , params: $2, code: $3}, location: @$ } }
     | test '[' arglist ']'
         { $$ = { type: 'arg', actual: $1, location: @$ } }
     | test comp_for
