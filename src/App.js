@@ -23,7 +23,7 @@ function App() {
 
   const parse = () => {
     const code = code1.join('\n') + '\n';
-    const code3 = ["cr = cr[-(1:3)]"].join('\n') + '\n';
+    const code3 = ["fun =function(x, r, ...) {}"].join('\n') + '\n';
     console.log(code)
 
     const codeJSON= RParse(code)

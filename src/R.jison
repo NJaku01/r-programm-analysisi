@@ -16,7 +16,7 @@ xid_continue            {xid_start}|{digit}
 
 // reserved
 operators               "-"|"+"|"!"|"~"|"?"|":"|"*"|"/"|"^"|"%x%"|","|"."|";"|
-                        "%%"|"%/%"|"%*%"|"%o%"|"%x%"|"%in%"|"<-"|"<<-"|">="|"=="|"="|">"|'$'|
+                        "%%"|"%/%"|"%*%"|"%o%"|"%x%"|"%in%"|"<-"|"<<-"|">="|"=="|"="|">"|'@'|
                         "<="|">="|"&"|"&&"|"|"|"||"|"<"|"->"|"$"|"("|")"|"["|"]"|"{"|"}"
                         
 ellipsis                "..."
@@ -52,7 +52,7 @@ octdigit                [0-7]
 bindigit                [0|1]
 
 floatnumber             {exponentfloat}|{pointfloat}
-pointfloat              {fraction}|{intpart}{fraction}|{intpart}"."
+pointfloat              {intpart}{fraction}|{intpart}"."
 exponentfloat           ({digit}+|{pointfloat}){exponent}
 intpart                 {digit}+
 fraction                "."{digit}+
@@ -197,7 +197,7 @@ file_input0
     | NEWLINE file_input0
         { $$ = $2 }
     | stmt file_input0
-        { $$ = $1.concat( $2 ) }
+        { $$ = [$1].concat( $2 ) }
     ;
 
 // decorator: '@' dotted_name [ '(' [arglist] ')' ] NEWLINE
@@ -272,6 +272,8 @@ tfpdef
         { $$ = { type: 'parameter', name: $1, location: @$ } }
     | NAME ':' test
         { $$ = { type: 'parameter', name: $1, anno: $3, location: @$ } }
+    | ELLIPSIS
+        { $$ = { type: 'parameter', name: $1, location: @$ } }
     ;
 // varargslist: NOTE to keep the grammar LALR, we approximate
 varargslist
@@ -342,12 +344,16 @@ expr_stmt
 
 
 assignlist
-    : '=' expr
+    : '=' newlines expr 
+        { $$ = { targets: [], sources: [$3] } }
+    | '=' expr 
         { $$ = { targets: [], sources: [$2] } }
     | "=" 'function' parameters suite
         { $$ = {targets: ["test"]}}
     | '=' expr2 assignlist
         { $$ = { targets: $2.concat($3.targets), sources: $3.sources } }
+    | '=' newlines expr2 assignlist
+        { $$ = { targets: $3.concat($4.targets), sources: $4.sources } }
     | '<-' expr
         { $$ = { targets: [], sources: [$2] } }
     | '<-' expr2 assignlist
@@ -523,12 +529,15 @@ dotted_as_names0
 // dotted_name: NAME ('.' NAME)*
 dotted_name
     : NAME
+    | NUMBER
     | NAME dotted_name0
         { $$ = $1 + $2 }
     ;
 
 dotted_name0
     : '.' NAME
+        { $$ = $1 + $2 }
+    | '.' NUMBER
         { $$ = $1 + $2 }
     | '.' NAME dotted_name0
         { $$ = $1 + $2 + $3 }
@@ -612,10 +621,8 @@ else_part
 
 // while_stmt: 'while' test ':' suite ['else' ':' suite]
 while_stmt
-    : 'while' test ':' suite
-        { $$ = { type: 'while',  cond: $2, code: $4, location: @$ } }
-    | 'while' test ':' suite 'else' ':' suite
-        { $$ = { type: 'while',  cond: $2, code: $4, else: $7, location: @$ } }
+    : 'while' '(' test ')' newlines suite
+        { $$ = { type: 'while',  cond: $3, code: $6, location: @$ } }
     ;
 
 // for_stmt: 'for' exprlist 'in' testlist ':' suite ['else' ':' suite]
@@ -980,6 +987,8 @@ atom
         { $$ = { type: 'literal', value: $1 * 1, location: @$ } } // convert to number
     | string
         { $$ = { type: 'literal', value: $1, location: @$ } }
+    | string "~" test "~" string
+        { $$ = { type: 'literal', value: $1+$2+$3+$4+$5, location: @$ } }
     | bytes
         { $$ = { type: 'literal', value: $1, location: @$ } }
     | ELLIPSIS
@@ -1054,13 +1063,17 @@ trailer
         { loc = @$; $$ = function (left) { return {type: 'index', value: left, args: $2, location: loc }; } }
     | '.' NAME
         { loc = @$; $$ = function (left) { return {type: 'dot', value: left, name: $2, location: loc }; } }
-    | '$' NAME
+    | '$' dotted_name
+        { loc = @$; $$ = function (left) { return {type: 'dot', value: left, name: $2, location: loc }; } }
+    | '@' NAME
         { loc = @$; $$ = function (left) { return {type: 'dot', value: left, name: $2, location: loc }; } }
     ;
 
 // subscriptlist: subscript (',' subscript)* [',']
 subscriptlist
     : subscript
+        { $$ = [ $1 ] }
+    | subscriptlist0
         { $$ = [ $1 ] }
     | subscript ','
         { $$ = [ $1 ] }
@@ -1241,14 +1254,22 @@ argument
         { $$ = { type: 'arg', actual: $1, loop: $2, location: @$ } }
     | test '=' test
         { $$ = { type: 'arg', keyword: $1, actual: $3, location: @$ } }
+    | test '=' argument
+        { $$ = { type: 'arg', keyword: $1, actual: $3, location: @$ } }
     | '**' test
         { $$ = { type: 'arg', kwargs: true, actual: $2, location: @$ } }
     | '*' test
         { $$ = { type: 'arg', varargs: true, actual: $2, location: @$ } }
-    | NAME '$' NAME
+    | NAME '$' dotted_name
+        { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}
+    | NAME '@' NAME
         { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}
     | NAME '$' NAME '[' array_identifier ']'
-        { $$ = { type: 'arg', actual: $1, selection : $3, identifier: $5, location: @$ }}    
+        { $$ = { type: 'arg', actual: $1, selection : $3, identifier: $5, location: @$ }}
+    | NUMBER ':' NUMBER
+        { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}
+    | NUMBER ':' test
+        { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}      
     ;
 
 array_identifier
