@@ -344,9 +344,9 @@ expr_stmt
 
 
 assignlist
-    : '=' newlines expr 
+    : '=' newlines expr2
         { $$ = { targets: [], sources: [$3] } }
-    | '=' expr 
+    | '=' expr2 
         { $$ = { targets: [], sources: [$2] } }
     | "=" 'function' parameters suite
         { $$ = {targets: ["test"]}}
@@ -354,11 +354,11 @@ assignlist
         { $$ = { targets: $2.concat($3.targets), sources: $3.sources } }
     | '=' newlines expr2 assignlist
         { $$ = { targets: $3.concat($4.targets), sources: $4.sources } }
-    | '<-' expr
+    | '<-' expr2
         { $$ = { targets: [], sources: [$2] } }
     | '<-' expr2 assignlist
         { $$ = { targets: $3.concat($2.targets), sources: $3.sources } }
-    | '<<-' expr
+    | '<<-' expr2
         { $$ = { targets: [], sources: [$2] } }
     | '<<-' expr2 assignlist
         { $$ = { targets: $3.concat($2.targets), sources: $3.sources } }
@@ -378,6 +378,8 @@ read
 expr2
     : expr
         { $$ = [ $1 ] }
+    | vektor
+        {$$ = [$1]}
     ;
 
 
@@ -594,21 +596,21 @@ compound_stmt:  if_stmt | while_stmt | for_stmt | try_stmt | with_stmt |
 
 // if_stmt: 'if' test ':' suite ('elif' test ':' suite)* ['else' ':' suite]
 if_stmt
-    : 'if' '(' test ')' newlines suite newlines
-        { $$ = { type: 'if',  cond: $3, code: $6, location: @$ }  }
+    : 'if' '(' test ')'  suite 
+        { $$ = { type: 'if',  cond: $3, code: $5, location: @$ }  }
 
-    | 'if' '(' test ')' newlines suite newlines if_stmt0
+    | 'if' '(' test ')'  suite  if_stmt0
         {
-            $$ =  { type: 'if', cond: $3, code: $6, elif: $8, location: @$ } 
+            $$ =  { type: 'if', cond: $3, code: $5, elif: $6, location: @$ } 
         };
 
 if_stmt0
-    : 'else' 'if' '(' test ')' newlines suite
-        { $$ = [ { cond: $4, code: $7 } ] }
-    | 'else' 'if' '(' test ')' newlines suite if_stmt0
-        { $$ = [ { cond: $4, code: $7 } ].concat( $8 ) }
-    | 'else' newlines suite
-        { $$ = [{ type: 'else', code: $3, location: @$ }] }
+    : 'else' 'if' '(' test ')' suite
+        { $$ = [ { cond: $4, code: $6 } ] }
+    | 'else' 'if' '(' test ')' suite if_stmt0
+        { $$ = [ { cond: $4, code: $6 } ].concat( $7 ) }
+    | 'else' suite
+        { $$ = [{ type: 'else', code: $2, location: @$ }] }
     ;
 
  
@@ -625,29 +627,13 @@ else_part
 
 // while_stmt: 'while' test ':' suite ['else' ':' suite]
 while_stmt
-    : 'while' '(' test ')' newlines suite
-        { $$ = { type: 'while',  cond: $3, code: $6, location: @$ } }
+    : 'while' '(' test ')' suite
+        { $$ = { type: 'while',  cond: $3, code: $5, location: @$ } }
     ;
 
 // for_stmt: 'for' exprlist 'in' testlist ':' suite ['else' ':' suite]
 for_stmt
-    : 'for' exprlist 'in' testlist colon suite
-        { $$ = { type: 'for',  target: $2, iter: $4, code: $6, location: @$,
-            decl_location: {
-                first_line: @$.first_line,
-                first_column: @$.first_column,
-                last_line: $5.location.last_line,
-                last_column: $5.location.last_column
-            } } }
-    | 'for' exprlist 'in' testlist colon suite 'else' ':' suite
-        { $$ = { type: 'for',  target: $2, iter: $4, code: $6, else: $9, location: @$,
-            decl_location: {
-                first_line: @$.first_line,
-                first_column: @$.first_column,
-                last_line: $5.location.last_line,
-                last_column: $5.location.last_column
-            } } }
-    | 'for' '(' NAME 'in' vektor ')' suite
+    : 'for' '(' NAME 'in' vektor ')' suite
         { $$ = { type: 'for',  target: $3, iter: $5, code: $7, location: @$,
             decl_location: {
                 first_line: @$.first_line,
@@ -726,7 +712,9 @@ with_item
 
 // suite: simple_stmt | NEWLINE INDENT stmt+ DEDENT
 suite
-    :  "{"  suite0 "}" 
+    :  newlines "{" newlines suite0 newlines "}" newlines
+        { $$ = $4 }
+    |   "{" suite0 "}" 
         { $$ = $2 }
     | simple_stmt
         { $$ = $1}
@@ -902,22 +890,22 @@ term
     ;
 
 term0
-    : '*' factor
-        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $2, location: loc }; } }
-    | '*' factor term0
-        { loc = @$; $$ = function (left) { return $3({type:'binop', op:$1, left: left, right: $2, location: loc }); } }
-    | '/' factor
-        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $2, location: loc }; } }
-    | '/' factor term0
-        { loc = @$; $$ = function (left) { return $3({type:'binop', op:$1, left: left, right: $2, location: loc }); } }
-    | '%' factor
-        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $2, location: loc }; } }
-    | '%' factor term0
-        { loc = @$; $$ = function (left) { return $3({type:'binop', op:$1, left: left, right: $2, location: loc }); } }
-    | '//' factor
-        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $2, location: loc }; } }
-    | '//' factor term0
-        { loc = @$; $$ = function (left) { return $3({type:'binop', op:$1, left: left, right: $2, location: loc }); } }
+    : '*' newlines factor
+        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $3, location: loc }; } }
+    | '*' newlines factor term0
+        { loc = @$; $$ = function (left) { return $4({type:'binop', op:$1, left: left, right: $3, location: loc }); } }
+    | '/' newlines factor
+        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $3, location: loc }; } }
+    | '/' newlines factor term0
+        { loc = @$; $$ = function (left) { return $4({type:'binop', op:$1, left: left, right: $3, location: loc }); } }
+    | '%' newlines factor
+        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $3, location: loc }; } }
+    | '%' newlines factor term0
+        { loc = @$; $$ = function (left) { return $4({type:'binop', op:$1, left: left, right: $3, location: loc }); } }
+    | '//' newlines factor
+        { loc = @$; $$ = function (left) { return {type:'binop', op:$1, left: left, right: $3, location: loc }; } }
+    | '//' newlines factor term0
+        { loc = @$; $$ = function (left) { return $4({type:'binop', op:$1, left: left, right: $3, location: loc }); } }
     ;
 
 // factor: ('+'|'-'|'~') factor | power
