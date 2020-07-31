@@ -15,7 +15,7 @@ xid_start               ("_")|({uppercase})|({lowercase})
 xid_continue            {xid_start}|{digit}
 
 // reserved
-operators               "-"|"+"|"!"|"~"|"?"|":"|"*"|"/"|"^"|"%x%"|","|"."|";"|
+operators               "-"|"+"|"!"|"~"|"?"|"::"|":"|"*"|"/"|"^"|"%x%"|","|"."|";"|
                         "%%"|"%/%"|"%*%"|"%o%"|"%x%"|"%in%"|"<-"|"<<-"|">="|"=="|"="|">"|'@'|
                         "<="|">="|"&"|"&&"|"|"|"||"|"<"|"->"|"$"|"("|")"|"["|"]"|"{"|"}"
                         
@@ -159,11 +159,11 @@ imagnumber              ({floatnumber}|{intpart})[jJ]
                         %}
 <INLINE>{identifier}    %{
                             const keywords = [
-                                "continue", "nonlocal", "finally", "lambda", "return", "assert",
-                                "global", "import", "except", "raise", "break", "False", "class",
-                                "while", "yield", "None", "True", "from", "else",
+                                "continue", "nonlocal", "finally", "return", "assert",
+                                "global", "import", "except", "raise", "break", "FALSE", "class",
+                                "while", "yield", "None", "TRUE", "from", "else",
                                 "pass", "for", "try", "def", "and", "del", "not", "if",
-                                "or", "in", "source", "library", "function"
+                                "or", "in", "source", "library", "function", "source"
                             ]
                             return ( keywords.indexOf( yytext ) == -1 )
                                 ? 'NAME'
@@ -197,7 +197,7 @@ file_input0
     | NEWLINE file_input0
         { $$ = $2 }
     | stmt file_input0
-        { $$ = [$1].concat( $2 ) }
+        { $$ = $1.concat( $2 ) }
     ;
 
 // decorator: '@' dotted_name [ '(' [arglist] ')' ] NEWLINE
@@ -300,7 +300,7 @@ stmt
     : simple_stmt
         { $$ = $1 }
     | compound_stmt
-        { $$ = $1 }
+        { $$ = [$1] }
     ;
 
 // simple_stmt: small_stmt (';' small_stmt)* [';'] NEWLINE
@@ -444,6 +444,10 @@ import_name
     | 'library'  '(' STRING ')'
         { $$ = {type: 'import', names: [{path: $3, name: $3}], location: @$ } }
     | 'library'  '(' NAME ')'
+        { $$ = {type: 'import', names: [{path: $3, name: $3}], location: @$ } }
+    | 'source'  '(' STRING ')'
+        { $$ = {type: 'import', names: [{path: $3, name: $3}], location: @$ } }
+    | 'source'  '(' STRING "," typedargslist')'
         { $$ = {type: 'import', names: [{path: $3, name: $3}], location: @$ } }
     ;
 
@@ -591,11 +595,11 @@ compound_stmt:  if_stmt | while_stmt | for_stmt | try_stmt | with_stmt |
 // if_stmt: 'if' test ':' suite ('elif' test ':' suite)* ['else' ':' suite]
 if_stmt
     : 'if' '(' test ')' newlines suite newlines
-        { $$ = [{ type: 'if',  cond: $3, code: $6, location: @$ } ] }
+        { $$ = { type: 'if',  cond: $3, code: $6, location: @$ }  }
 
     | 'if' '(' test ')' newlines suite newlines if_stmt0
         {
-            $$ = [ { type: 'if', cond: $3, code: $6, elif: $8, location: @$ } ]
+            $$ =  { type: 'if', cond: $3, code: $6, elif: $8, location: @$ } 
         };
 
 if_stmt0
@@ -745,20 +749,6 @@ test
 
 // test_nocond: or_test | lambdef_nocond
 test_nocond: or_test | lambdef_nocond ;
-
-// lambdef: 'lambda' [varargslist] ':' test
-lambdef
-    : 'lambda' ':' test
-        { $$ = { type: 'lambda',  args: '', code: $3, location: @$ } }
-    | 'lambda' varargslist ':' test
-        { $$ = { type: 'lambda',  args: $2, code: $3, location: @$ } }
-    ;
-
-// lambdef_nocond: 'lambda' [varargslist] ':' test_nocond
-lambdef_nocond
-    : 'lambda' ':' test_nocond
-    | 'lambda' varargslist ':' test_nocond
-    ;
 
 // or_test: and_test ('or' and_test)*
 or_test
@@ -958,6 +948,8 @@ atom_expr
     : atom
     | atom trailer_list
         { partial = $2($1); partial.location = @$; $$ = partial; }
+    | atom '::' atom trailer_list
+        { partial = $4($3); partial.location = @$; $$ = partial; }
     ;
 
 // atom: ('(' [yield_expr|testlist_comp] ')' |
@@ -995,10 +987,10 @@ atom
         { $$ = { type: 'literal', value: { type: 'ellipsis' }, location: @$ } }
     | 'None'
         { $$ = { type: 'literal', value: 'None', location: @$ } }
-    | 'True'
-        { $$ = { type: 'literal', value: 'True', location: @$} }
-    | 'False'
-        { $$ = { type: 'literal', value: 'False', location: @$} }
+    | 'TRUE'
+        { $$ = { type: 'literal', value: 'TRUE', location: @$} }
+    | 'FALSE'
+        { $$ = { type: 'literal', value: 'FALSE', location: @$} }
     ;
 
 string
@@ -1074,7 +1066,7 @@ subscriptlist
     : subscript
         { $$ = [ $1 ] }
     | subscriptlist0
-        { $$ = [ $1 ] }
+        { $$ = $1 }
     | subscript ','
         { $$ = [ $1 ] }
     | subscript subscriptlist0
@@ -1269,7 +1261,7 @@ argument
     | NUMBER ':' NUMBER
         { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}
     | NUMBER ':' test
-        { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}      
+        { $$ = { type: 'arg', actual: $3, selection : $1, location: @$ }}      
     ;
 
 array_identifier
