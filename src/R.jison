@@ -163,7 +163,7 @@ imagnumber              ({floatnumber}|{intpart})[jJ]
                                 "global", "import", "except", "raise", "break", "FALSE", "class",
                                 "while", "yield", "None", "TRUE", "from", "else",
                                 "pass", "for", "try", "def", "and", "del", "not", "if",
-                                "or", "in", "source", "library", "function", "source"
+                                "or", "%in%", "in", "source", "library", "function", "source"
                             ]
                             return ( keywords.indexOf( yytext ) == -1 )
                                 ? 'NAME'
@@ -345,9 +345,9 @@ expr_stmt
 
 assignlist
     : '=' newlines expr2
-        { $$ = { targets: [], sources: [$3] } }
+        { $$ = { targets: [], sources: $3 } }
     | '=' expr2 
-        { $$ = { targets: [], sources: [$2] } }
+        { $$ = { targets: [], sources: $2 } }
     | "=" 'function' parameters suite
         { $$ = {targets: ["test"]}}
     | '=' expr2 assignlist
@@ -355,11 +355,11 @@ assignlist
     | '=' newlines expr2 assignlist
         { $$ = { targets: $3.concat($4.targets), sources: $4.sources } }
     | '<-' expr2
-        { $$ = { targets: [], sources: [$2] } }
+        { $$ = { targets: [], sources: $2 } }
     | '<-' expr2 assignlist
         { $$ = { targets: $3.concat($2.targets), sources: $3.sources } }
     | '<<-' expr2
-        { $$ = { targets: [], sources: [$2] } }
+        { $$ = { targets: [], sources: $2 } }
     | '<<-' expr2 assignlist
         { $$ = { targets: $3.concat($2.targets), sources: $3.sources } }
     | '=' 'read.' read 
@@ -377,7 +377,7 @@ read
 
 expr2
     : expr
-        { $$ = [ $1 ] }
+        { $$ =  [$1]  }
     | vektor
         {$$ = [$1]}
     ;
@@ -641,7 +641,16 @@ for_stmt
                 last_line: $5[0].max.location.last_line,
                 last_column: $5[0].max.location.last_column
             } } }
+    | 'for' '(' NAME 'in' atom ')' suite
+        { $$ = { type: 'for',  target: $3, iter: [$5], code: $7, location: @$,
+            decl_location: {
+                first_line: @$.first_line,
+                first_column: @$.first_column,
+                last_line: $5.location.last_line,
+                last_column: $5.location.last_column
+            } } }
     ;
+
 
 vektor
     : expr ':' expr
@@ -724,7 +733,7 @@ suite0
     : stmt
         { $$ = $1 }
     | stmt suite0
-        { $$ = [$1].concat( $2 ) }
+        { $$ = $1.concat( $2 ) }
     ;
 
 // test: or_test ['if' or_test 'else' test] | lambdef
@@ -787,9 +796,10 @@ comparison0
         { loc=@$; $$ = function (left) { return $3({ type: 'binop', op: $1, left: left, right: $2, location: loc }); } }
     ;
 
-// comp_op: '<'|'>'|'=='|'>='|'<='|'<>'|'!='|'in'|'not' 'in'|'is'|'is' 'not'
+// comp_op: '<'|'>'|'=='|'>='|'<='|'<>'|'!='|'%in%'|'not' 'in'|'is'|'is' 'not'
 // NOTE: '<>' is removed because we don't need to support __future__
 comp_op: '<'|'>'|'=='|'>='|'<='|'!='
+    |'%in%'
     |'in'
     |'not' 'in'
         { $$ = $1+$2 }
@@ -961,6 +971,12 @@ atom
         { $$ = { type: $2.type, entries: $2.entries, comp_for: $2.comp_for, location: @$ } }
     | NAME
         { $$ = { type: 'name', id: $1, location: @$ } }
+    | NAME '$' NAME '[' array_identifier ']'
+        { $$ = { type: 'arg', actual: $1, selection : $3, identifier: $5, location: @$ }}
+    | NAME '$' NAME '[' argument ']'
+        { $$ = { type: 'arg', actual: $1, selection : $3, identifier: $5, location: @$ }}
+    | NAME '$' dotted_name
+        { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}
     | dotted_name
         { $$ = { type: 'name', id: $1, location: @$ } }
     | NUMBER
@@ -1240,12 +1256,8 @@ argument
         { $$ = { type: 'arg', kwargs: true, actual: $2, location: @$ } }
     | '*' test
         { $$ = { type: 'arg', varargs: true, actual: $2, location: @$ } }
-    | NAME '$' dotted_name
-        { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}
     | NAME '@' NAME
         { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}
-    | NAME '$' NAME '[' array_identifier ']'
-        { $$ = { type: 'arg', actual: $1, selection : $3, identifier: $5, location: @$ }}
     | NUMBER ':' NUMBER
         { $$ = { type: 'arg', actual: $1, selection : $3, location: @$ }}
     | NUMBER ':' test
@@ -1257,6 +1269,8 @@ array_identifier
         {$$ = [$2]}
     | expr array_identifier0
         {$$ = [$1].concat($2)}
+    | expr
+        {$$ = [$1]}
     ;
 
 array_identifier0
